@@ -1,699 +1,514 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Leaf, Heart, Wind, Scroll, ChevronRight, Camera, Info, ArrowLeft, UtensilsCrossed, Eye, Mail, Search, Clock, Moon, Sun, History } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本草心境 - 萬物並作</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --parchment: #F5F2E8;
+            --ink: #1A1A1A;
+            --cinnabar: #A13D2D;
+            --herbal: #6B705C;
+            --gold: #B89B72;
+        }
 
-// --- 設計規範 / Design Tokens ---
-const COLORS = {
-  parchment: '#F5F2E8',
-  ink: '#1A1A1A',
-  cinnabar: '#A13D2D',
-  herbal: '#6B705C',
-  gold: '#B89B72',
-  paperShadow: 'rgba(0, 0, 0, 0.05)',
-};
-
-// --- 模擬數據與工具函數 ---
-const HERB_LIBRARY = [
-  { name: '人參', nature: '微溫', taste: '甘、微苦', category: '補氣', desc: '大補元氣，復脈固脫，補脾益肺。' },
-  { name: '枸杞', nature: '平', taste: '甘', category: '補血', desc: '滋補肝腎，益精明目。' },
-  { name: '薄荷', nature: '涼', taste: '辛', category: '解表', desc: '宣散風熱，清頭目，透疹。' },
-  { name: '當歸', nature: '溫', taste: '甘、辛', category: '補血', desc: '補血和血，調經止痛，潤燥滑腸。' },
-  { name: '黃芪', nature: '微溫', taste: '甘', category: '補氣', desc: '補氣升陽，固表止汗。' }
-];
-
-const getChineseDateTime = () => {
-  const now = new Date();
-  const hours = now.getHours();
-  
-  const shichenArray = [
-    { name: '子時', range: '23:00-01:00', greeting: '半夜 · 凝思', element: '水' },
-    { name: '丑時', range: '01:00-03:00', greeting: '凌晨 · 守靜', element: '土' },
-    { name: '寅時', range: '03:00-05:00', greeting: '黎明 · 聽息', element: '木' },
-    { name: '卯時', range: '05:00-07:00', greeting: '清晨 · 觀息', element: '木' },
-    { name: '辰時', range: '07:00-09:00', greeting: '食時 · 養氣', element: '土' },
-    { name: '巳時', range: '09:00-11:00', greeting: '隅中 · 安神', element: '火' },
-    { name: '午時', range: '11:00-13:00', greeting: '日中 · 靜悟', element: '火' },
-    { name: '未時', range: '13:00-15:00', greeting: '日昳 · 啜茗', element: '土' },
-    { name: '申時', range: '15:00-17:00', greeting: '晡時 · 閱卷', element: '金' },
-    { name: '酉時', range: '17:00-19:00', greeting: '日入 · 歸心', element: '金' },
-    { name: '戌時', range: '19:00-21:00', greeting: '黃昏 · 止欲', element: '土' },
-    { name: '亥時', range: '21:00-23:00', greeting: '人定 · 入夢', element: '水' }
-  ];
-  const shichenIdx = Math.floor((hours + 1) % 24 / 2);
-  const shichen = shichenArray[shichenIdx];
-
-  const term = "驚蟄"; 
-  const dateStr = `${now.getFullYear()}年 ${now.getMonth() + 1}月 ${now.getDate()}日`;
-  
-  return { date: dateStr, shichen, term };
-};
-
-const numberToChinese = (num) => {
-  const chineseNums = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-  if (num <= 10) return chineseNums[num];
-  if (num < 20) return '十' + (num % 10 === 0 ? '' : chineseNums[num % 10]);
-  const tens = Math.floor(num / 10);
-  const units = num % 10;
-  return (tens === 1 ? '十' : chineseNums[tens] + '十') + (units === 0 ? '' : chineseNums[units]);
-};
-
-// --- 主程式組件 ---
-const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState('home');
-  const [isVisible, setIsVisible] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState(null);
-  const [selectedVital, setSelectedVital] = useState(null);
-  const [isInsightExpanded, setIsInsightExpanded] = useState(false);
-  const [dateTime, setDateTime] = useState(getChineseDateTime());
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // 調息與冥想狀態
-  const [totalZenSeconds, setTotalZenSeconds] = useState(1200); 
-  const [zenLogs, setZenLogs] = useState([
-    { id: 1, duration: 600, timestamp: '昨日 申時', type: '定心' },
-    { id: 2, duration: 600, timestamp: '今日 卯時', type: '定心' }
-  ]);
-
-  // 食事紀錄狀態
-  const [foodLogs, setFoodLogs] = useState([
-    { id: 1, name: '玄米茶', nature: '性平', cal: 2, pro: 0.1, fat: 0, time: '晨時' },
-  ]);
-
-  useEffect(() => {
-    setIsVisible(true);
-    const timer = setInterval(() => setDateTime(getChineseDateTime()), 60000);
-    return () => clearInterval(timer);
-  }, [activeTab, selectedVital, isAuthenticated]);
-
-  const dailyTotals = foodLogs.reduce((acc, curr) => ({
-    cal: acc.cal + curr.cal,
-    pro: acc.pro + curr.pro,
-    fat: acc.fat + curr.fat
-  }), { cal: 0, pro: 0, fat: 0 });
-
-  const fadeClass = isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4';
-
-  const handleScan = () => {
-    setIsScanning(true);
-    setScanResult(null);
-    setTimeout(() => {
-      setIsScanning(false);
-      const newFood = {
-        id: Date.now(),
-        name: '紅富士蘋果',
-        nature: '性平',
-        benefit: '生津止渴，潤肺除煩',
-        cal: 52,
-        pro: 0.3,
-        fat: 0.2,
-        time: dateTime.shichen.name
-      };
-      setScanResult(newFood);
-      setFoodLogs(prev => [newFood, ...prev]);
-    }, 2000);
-  };
-
-  const recordZenSession = (seconds) => {
-    if (seconds < 5) return; 
-    setTotalZenSeconds(prev => prev + seconds);
-    setZenLogs(prev => [{
-      id: Date.now(),
-      duration: seconds,
-      timestamp: `今日 ${dateTime.shichen.name}`,
-      type: '定心'
-    }, ...prev]);
-  };
-
-  const Navigation = () => {
-    const isInsightActive = ['vitals', 'diet', 'zen'].includes(activeTab);
-
-    return (
-      <nav className={`fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center bg-white/40 backdrop-blur-lg rounded-full border border-black/5 shadow-xl z-50 transition-all duration-700 ease-in-out px-4 py-3 ${selectedVital ? 'opacity-0 translate-y-20 pointer-events-none' : 'opacity-100'}`}>
-        <button
-          onClick={() => {
-            setIsVisible(false);
-            setIsInsightExpanded(false);
-            setTimeout(() => { setActiveTab('home'); setIsVisible(true); }, 300);
-          }}
-          className={`flex flex-col items-center px-4 transition-all duration-500 ${activeTab === 'home' ? 'scale-110' : 'opacity-40'}`}
-        >
-          <Scroll size={18} color={activeTab === 'home' ? COLORS.cinnabar : COLORS.ink} strokeWidth={1.5} />
-          <span className="text-[10px] tracking-widest font-serif mt-1">卷軸</span>
-        </button>
-
-        <div className="w-[1px] h-4 bg-black/5 mx-2" />
-
-        <div className={`flex items-center transition-all duration-700 ease-in-out overflow-hidden ${isInsightExpanded || isInsightActive ? 'max-w-xs px-2' : 'max-w-[48px]'}`}>
-          <button
-            onClick={() => {
-              const wasActive = isInsightActive;
-              setIsInsightExpanded(!isInsightExpanded);
-              if (!wasActive) {
-                setIsVisible(false);
-                setTimeout(() => { setActiveTab('diet'); setIsVisible(true); }, 300);
-              }
-            }}
-            className={`flex flex-col items-center px-3 transition-all duration-500 shrink-0 ${isInsightActive ? 'opacity-100' : 'opacity-40'}`}
-          >
-            <Eye size={18} color={isInsightActive ? COLORS.cinnabar : COLORS.ink} strokeWidth={1.5} />
-            <span className="text-[10px] tracking-widest font-serif mt-1">內觀</span>
-          </button>
-
-          <div className={`flex items-center transition-all duration-700 ease-in-out gap-4 ${isInsightExpanded || isInsightActive ? 'opacity-100 ml-4 mr-2' : 'opacity-0 pointer-events-none w-0'}`}>
-            {[
-              { id: 'diet', icon: UtensilsCrossed, label: '食事' },
-              { id: 'vitals', icon: Heart, label: '氣血' },
-              { id: 'zen', icon: Wind, label: '調息' },
-            ].map((sub) => (
-              <button
-                key={sub.id}
-                onClick={() => {
-                  if (activeTab === sub.id) return;
-                  setIsVisible(false);
-                  setTimeout(() => { setActiveTab(sub.id); setIsVisible(true); }, 300);
-                }}
-                className={`flex flex-col items-center transition-all duration-500 ${activeTab === sub.id ? 'scale-110 opacity-100' : 'opacity-30 hover:opacity-60'}`}
-              >
-                <sub.icon size={16} color={activeTab === sub.id ? COLORS.cinnabar : COLORS.ink} strokeWidth={1.5} />
-                <span className="text-[9px] tracking-widest font-serif mt-1">{sub.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="w-[1px] h-4 bg-black/5 mx-2" />
-
-        <button
-          onClick={() => {
-            setIsVisible(false);
-            setIsInsightExpanded(false);
-            setTimeout(() => { setActiveTab('herbs'); setIsVisible(true); }, 300);
-          }}
-          className={`flex flex-col items-center px-4 transition-all duration-500 ${activeTab === 'herbs' ? 'scale-110' : 'opacity-40'}`}
-        >
-          <Leaf size={18} color={activeTab === 'herbs' ? COLORS.cinnabar : COLORS.ink} strokeWidth={1.5} />
-          <span className="text-[10px] tracking-widest font-serif mt-1">百草</span>
-        </button>
-      </nav>
-    );
-  };
-
-  const Stamp = ({ children, color = COLORS.cinnabar, onClick, className = "" }) => (
-    <button 
-      onClick={onClick}
-      className={`inline-block border-2 p-1 px-3 text-xs font-serif rotate-[-1deg] transition-all active:scale-95 hover:rotate-0 cursor-pointer ${className}`}
-      style={{ borderColor: color, color: color, boxShadow: `2px 2px 0 ${COLORS.paperShadow}` }}
-    >
-      {children}
-    </button>
-  );
-
-  const SectionLogin = () => (
-    <div className={`min-h-[85vh] flex flex-col items-center justify-center transition-all duration-1000 ease-out ${fadeClass}`}>
-      <div className="mb-20 text-center">
-        <div className="writing-vertical-rl text-5xl font-serif tracking-[0.4em] mx-auto border-x border-black/5 px-6 py-4 leading-none">
-          本草心境
-        </div>
-        <p className="mt-8 text-xs font-serif tracking-[0.6em] opacity-30">心外無物 · 內視乾坤</p>
-      </div>
-
-      <div className="w-full max-w-[280px] space-y-4">
-        <button 
-          onClick={() => { setIsVisible(false); setTimeout(() => setIsAuthenticated(true), 800); }}
-          className="w-full flex items-center justify-center gap-3 py-3 border border-black/10 bg-white/40 rounded-sm hover:bg-white/60 transition-all active:scale-95"
-        >
-          <Mail size={16} strokeWidth={1.5} />
-          <span className="text-xs font-serif tracking-widest">以電子郵件登入</span>
-        </button>
-        <div className="text-center">
-          <button 
-            onClick={() => { setIsVisible(false); setTimeout(() => setIsAuthenticated(true), 800); }}
-            className="text-[10px] font-serif opacity-30 tracking-widest hover:opacity-100 transition-opacity"
-          >
-            [ 訪客身份入卷 ]
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const SectionHome = () => {
-    const zenMinutes = Math.ceil(totalZenSeconds / 60);
-
-    return (
-      <div className={`transition-all duration-1000 ease-out ${fadeClass}`}>
-        <div className="flex justify-between items-start mb-16">
-          <div className="flex gap-4">
-            <div className="writing-vertical-rl text-3xl font-serif tracking-[0.2em] pt-4 border-r border-black/10 pr-4 leading-none">
-              本草心境
-            </div>
-            <div className="flex gap-4">
-              <div className="writing-vertical-rl text-[10px] font-serif opacity-30 pt-4 tracking-[0.5em]">
-                {dateTime.date} · {dateTime.term}
-              </div>
-              <div className="pt-4">
-                <p className="text-xs opacity-50 font-serif tracking-widest mb-1">{dateTime.shichen.name} ({dateTime.shichen.range})</p>
-                <h2 className="text-xl font-serif">{dateTime.shichen.greeting}</h2>
-              </div>
-            </div>
-          </div>
-          <div className="w-12 h-12 rounded-full border border-black/10 flex items-center justify-center relative">
-            <div className="absolute inset-0 border border-black/5 rounded-full animate-ping opacity-20" />
-            <div className="w-8 h-8 rounded-full bg-[#A13D2D]/10 flex items-center justify-center">
-              <span className="text-[10px] font-serif text-[#A13D2D]">{dateTime.shichen.element}</span>
-            </div>
-          </div>
-        </div>
-        <div className="relative p-10 mb-12 border border-black/5 bg-white/30 backdrop-blur-sm rounded-sm italic font-serif text-lg leading-loose tracking-widest text-center shadow-inner">
-          <span className="absolute top-4 left-4 text-4xl opacity-10 font-serif">「</span>
-          萬物並作，吾以觀復。
-          <br />
-          今日宜：早臥早起，廣步於庭。
-          <span className="absolute bottom-4 right-4 text-4xl opacity-10 font-serif">」</span>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-6 bg-white/40 border border-black/5 rounded-sm">
-            <p className="text-[10px] opacity-50 font-serif mb-4 tracking-widest">STEP / 步履</p>
-            <div className="flex items-baseline gap-1 flex-nowrap whitespace-nowrap overflow-hidden">
-              <span className="text-2xl sm:text-4xl font-serif">六千</span>
-              <span className="text-[10px] font-serif opacity-40 shrink-0">步</span>
-            </div>
-          </div>
-          <button 
-            onClick={() => {
-              setIsVisible(false);
-              setTimeout(() => { setActiveTab('zen'); setIsVisible(true); }, 300);
-            }}
-            className="p-6 bg-white/40 border border-black/5 rounded-sm text-left hover:bg-white/60 transition-all active:scale-95 group overflow-hidden"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <p className="text-[10px] opacity-50 font-serif tracking-widest">ZEN / 冥想</p>
-              <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
-            </div>
-            <div className="flex items-baseline gap-1 flex-nowrap whitespace-nowrap overflow-hidden">
-              <span className="text-2xl sm:text-4xl font-serif truncate">{numberToChinese(zenMinutes)}</span>
-              <span className="text-[10px] font-serif opacity-40 shrink-0">分</span>
-            </div>
-          </button>
-        </div>
-        
-        <button 
-          onClick={() => { setIsVisible(false); setTimeout(() => setIsAuthenticated(false), 500); }}
-          className="mt-24 block mx-auto text-[10px] font-serif opacity-20 hover:opacity-100 transition-opacity tracking-[0.3em]"
-        >
-          [ 封存卷軸 · 登出 ]
-        </button>
-      </div>
-    );
-  };
-
-  const SectionVitals = () => {
-    const vitals = [
-      { id: 'heart', label: '脈搏 (Heart Rate)', value: '七十二', unit: '次/分', color: COLORS.cinnabar },
-      { id: 'sleep', label: '深度睡眠 (Deep Sleep)', value: '三時', unit: '刻', color: COLORS.herbal },
-      { id: 'mood', label: '情緒緯度 (Mind State)', value: '平靜', unit: '心鏡', color: '#8892B0' },
-    ];
-
-    if (selectedVital) {
-      const data = vitals.find(v => v.id === selectedVital);
-      return (
-        <div className={`transition-all duration-700 ease-out ${fadeClass}`}>
-          <button 
-            onClick={() => { setIsVisible(false); setTimeout(() => setSelectedVital(null), 300); }}
-            className="flex items-center gap-2 mb-10 text-[10px] font-serif opacity-40 hover:opacity-100 transition-opacity"
-          >
-            <ArrowLeft size={12} /> 返回氣血清單
-          </button>
-          <div className="flex justify-between items-start mb-8">
-            <h2 className="text-3xl font-serif tracking-widest">{data.label.split(' ')[0]}趨勢</h2>
-            <div className="text-right">
-              <p className="text-2xl font-serif" style={{ color: data.color }}>{data.value}</p>
-            </div>
-          </div>
-          <div className="relative h-64 w-full bg-white/20 border border-black/5 rounded-sm p-4 mb-8 flex items-end">
-             <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <path d="M 0,80 Q 10,75 20,60 T 40,65 T 60,40 T 80,45 T 100,20" fill="none" stroke={data.color} strokeWidth="1.5" strokeLinecap="round" className="animate-drawPath" />
-            </svg>
-          </div>
-          <p className="text-xs font-serif leading-relaxed opacity-60">
-            觀脈象：脈來流利，如盤走珠。此為氣血充盈之象，宜保持當前作息。
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <div className={`transition-all duration-1000 ease-out ${fadeClass}`}>
-        <h2 className="text-3xl font-serif mb-12 tracking-widest">氣血盈虧</h2>
-        <div className="space-y-8">
-          {vitals.map((item, i) => (
-            <div key={i} className="flex justify-between items-end border-b border-black/5 pb-6">
-              <div>
-                <p className="text-[10px] font-serif opacity-40 mb-2 uppercase tracking-tighter">{item.label}</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-serif">{item.value}</span>
-                  <span className="text-[10px] font-serif opacity-40">{item.unit}</span>
-                </div>
-              </div>
-              <Stamp color={item.color} onClick={() => { setIsVisible(false); setTimeout(() => setSelectedVital(item.id), 300); }}>閱覽趨勢</Stamp>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const SectionDiet = () => (
-    <div className={`transition-all duration-1000 ease-out ${fadeClass}`}>
-      <h2 className="text-3xl font-serif tracking-widest mb-2">食事 · 觀性</h2>
-      <p className="text-xs font-serif opacity-40 mb-8">每日供養，貴在節制</p>
-      
-      <div className="grid grid-cols-3 gap-2 mb-8">
-        {[
-          { label: 'Calories', val: dailyTotals.cal },
-          { label: 'Protein', val: dailyTotals.pro.toFixed(1) },
-          { label: 'Fat', val: dailyTotals.fat.toFixed(1) }
-        ].map((stat, i) => (
-          <div key={i} className="p-4 bg-white/20 border border-black/5 text-center">
-            <p className="text-[8px] font-serif opacity-40 mb-1 uppercase tracking-tighter">{stat.label}</p>
-            <p className="text-xl font-serif">{stat.val}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="relative aspect-[4/3] bg-white/10 border border-black/5 rounded-sm overflow-hidden flex flex-col items-center justify-center p-4 mb-10 shadow-inner group">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        {!scanResult && !isScanning ? (
-          <div className="text-center">
-            <Camera size={24} strokeWidth={1} className="opacity-20 mx-auto mb-4" />
-            <Stamp color={COLORS.ink} onClick={handleScan}>開啟靈鏡</Stamp>
-            <p className="mt-4 text-[9px] font-serif opacity-30 tracking-widest">辨識食物性味</p>
-          </div>
-        ) : isScanning ? (
-          <div className="relative flex flex-col items-center">
-            <div className="w-32 h-32 border border-dashed border-black/20 rounded-full animate-spin-slow mb-4" />
-            <p className="text-[10px] font-serif tracking-[0.5em] animate-pulse">識辨中...</p>
-          </div>
-        ) : (
-          <div className="w-full text-center animate-fadeIn">
-            <h3 className="text-2xl font-serif mb-2">{scanResult.name}</h3>
-            <div className="flex justify-center gap-2 mb-4">
-              <span className="px-2 py-0.5 border border-[#A13D2D] text-[#A13D2D] text-[9px] font-serif">{scanResult.nature}</span>
-              <span className="px-2 py-0.5 border border-black/10 text-black/40 text-[9px] font-serif">入肺經</span>
-            </div>
-            <p className="text-[10px] font-serif opacity-50 mb-6 italic">「{scanResult.benefit}」</p>
-            <button onClick={() => setScanResult(null)} className="text-[10px] font-serif opacity-20 hover:opacity-100 transition-opacity tracking-widest underline underline-offset-4">繼續觀照</button>
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        <h3 className="text-xs font-serif tracking-widest opacity-40 border-b border-black/5 pb-2">今日食單</h3>
-        <div className="space-y-3">
-          {foodLogs.map((log) => (
-            <div key={log.id} className="flex justify-between items-center p-4 bg-white/10 border border-black/5 rounded-sm animate-fadeIn">
-              <div>
-                <span className="text-sm font-serif block">{log.name}</span>
-                <span className="text-[8px] font-serif opacity-30 uppercase tracking-tighter">{log.time}</span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] font-serif block">{log.cal} 卡</span>
-                <span className="text-[10px] font-serif text-[#A13D2D]">{log.nature}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const SectionZen = () => {
-    const [seconds, setSeconds] = useState(0);
-    const [isActive, setIsActive] = useState(false);
-
-    useEffect(() => {
-      let interval = null;
-      if (isActive) {
-        interval = setInterval(() => setSeconds(s => s + 1), 1000);
-      } else {
-        clearInterval(interval);
-      }
-      return () => clearInterval(interval);
-    }, [isActive]);
-
-    const handleToggle = () => {
-      if (isActive) {
-        recordZenSession(seconds);
-        setIsActive(false);
-        setSeconds(0);
-      } else {
-        setIsActive(true);
-      }
-    };
-
-    const isInhale = (seconds % 10) < 5;
-
-    return (
-      <div className={`transition-all duration-1000 ease-out ${fadeClass}`}>
-        <div className="flex flex-col items-center justify-center min-h-[50vh]">
-          <div className="relative w-64 h-64 flex items-center justify-center">
-            {isActive && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                {[0, 1, 2, 3].map((i) => (
-                  <div 
-                    key={i}
-                    className="absolute rounded-full border border-black/10 animate-ripple-slow"
-                    style={{ 
-                      width: '100%', 
-                      height: '100%',
-                      animationDelay: `${i * 2.5}s`,
-                      opacity: 0
-                    }}
-                  />
-                ))}
-                <div className="absolute w-40 h-40 bg-black/[0.02] rounded-full animate-pulse-extra-slow" />
-              </div>
-            )}
-            
-            {!isActive && (
-              <div className="absolute w-40 h-40 border border-black/5 rounded-full opacity-40 scale-100 transition-all duration-1000" />
-            )}
-
-            <div className="text-center z-10">
-              <div className={`text-4xl font-serif tracking-[0.4em] mb-4 transition-all duration-1000 ${isActive ? 'scale-110' : 'scale-100'}`}>
-                {isActive ? '息' : '定'}
-              </div>
-              {isActive && (
-                <div className="text-[10px] font-serif opacity-30 tracking-[0.2em] tabular-nums">
-                  {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <div className="mt-20 text-center relative w-full h-10 flex items-center justify-center">
-            {/* 靜態背景文字 */}
-            {!isActive && (
-              <p className="text-sm font-serif opacity-40 tracking-[0.2em] animate-fadeIn">靜心入定，感受氣息</p>
-            )}
-            
-            {/* 交替漸變文字 */}
-            {isActive && (
-              <>
-                <p className={`absolute text-sm font-serif tracking-[0.2em] transition-opacity duration-1000 ${isInhale ? 'opacity-40' : 'opacity-0'}`}>
-                  深緩吸氣 · 氣納丹田
-                </p>
-                <p className={`absolute text-sm font-serif tracking-[0.2em] transition-opacity duration-1000 ${!isInhale ? 'opacity-40' : 'opacity-0'}`}>
-                  徐徐吐納 · 萬慮皆消
-                </p>
-              </>
-            )}
-          </div>
-
-          <div className="mt-10">
-            <Stamp 
-              color={isActive ? COLORS.ink : COLORS.cinnabar} 
-              onClick={handleToggle}
-              className="px-10 py-2.5"
-            >
-              {isActive ? '結束調息' : '開始定心'}
-            </Stamp>
-          </div>
-        </div>
-
-        <div className="mt-16 animate-fadeIn">
-          <div className="flex items-center gap-2 mb-6 border-b border-black/5 pb-2">
-            <History size={14} className="opacity-30" />
-            <h3 className="text-xs font-serif tracking-[0.3em] opacity-40">往日調息</h3>
-          </div>
-          <div className="space-y-4">
-            {zenLogs.map((log) => (
-              <div key={log.id} className="flex justify-between items-center py-3">
-                <div>
-                  <p className="text-sm font-serif">{log.type}</p>
-                  <p className="text-[9px] font-serif opacity-30 mt-1 uppercase tracking-tighter">{log.timestamp}</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xl font-serif">{Math.ceil(log.duration / 60)}</span>
-                  <span className="text-[9px] font-serif opacity-40 ml-1">分</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const SectionHerbs = () => {
-    const filteredHerbs = useMemo(() => {
-      return HERB_LIBRARY.filter(h => h.name.includes(searchQuery) || h.category.includes(searchQuery));
-    }, [searchQuery]);
-
-    return (
-      <div className={`transition-all duration-1000 ease-out ${fadeClass}`}>
-        <h2 className="text-3xl font-serif mb-8 tracking-widest">百草圖鑑</h2>
-        
-        <div className="relative mb-10">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-20" />
-          <input 
-            type="text" 
-            placeholder="尋百草 (如：補氣、人參)"
-            className="w-full bg-white/40 border border-black/5 py-3 pl-10 pr-4 text-xs font-serif tracking-widest rounded-sm focus:outline-none focus:border-black/20 transition-all placeholder:opacity-30"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        <div className="space-y-6">
-          {filteredHerbs.map((herb, i) => (
-            <div key={i} className="p-6 border border-black/5 bg-white/20 rounded-sm animate-fadeIn relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-2 text-[8px] font-serif opacity-10 rotate-90 origin-top-right tracking-widest uppercase">
-                {herb.category}
-              </div>
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="font-serif text-xl mb-1">{herb.name}</h3>
-                  <div className="flex gap-2">
-                    <span className="text-[9px] font-serif px-1.5 border border-[#A13D2D] text-[#A13D2D]">{herb.nature}</span>
-                    <span className="text-[9px] font-serif px-1.5 border border-black/10 opacity-40">{herb.taste}</span>
-                  </div>
-                </div>
-                <Stamp color={COLORS.ink} className="scale-75 opacity-0 group-hover:opacity-100">詳閱</Stamp>
-              </div>
-              <p className="text-xs font-serif opacity-50 leading-relaxed">{herb.desc}</p>
-            </div>
-          ))}
-          {filteredHerbs.length === 0 && (
-            <div className="text-center py-20 opacity-20 font-serif text-xs tracking-widest">
-              卷中暫無此草藥之記載
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="min-h-screen selection:bg-[#A13D2D]/20 text-[#1A1A1A] font-sans overflow-x-hidden relative" style={{ backgroundColor: COLORS.parchment }}>
-      <div className="fixed inset-0 pointer-events-none opacity-[0.04] z-[100] mix-blend-multiply" 
-           style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/handmade-paper.png")' }} />
-      <div className="fixed -top-20 -right-20 w-80 h-80 bg-[#B89B72] rounded-full blur-[120px] opacity-[0.07] pointer-events-none" />
-      <div className="fixed -bottom-20 -left-20 w-80 h-80 bg-[#A13D2D] rounded-full blur-[120px] opacity-[0.05] pointer-events-none" />
-
-      <main className="max-w-md mx-auto px-8 pt-20 pb-44 relative z-10">
-        {!isAuthenticated ? (
-          <SectionLogin />
-        ) : (
-          <>
-            {activeTab === 'home' && <SectionHome />}
-            {activeTab === 'vitals' && <SectionVitals />}
-            {activeTab === 'diet' && <SectionDiet />}
-            {activeTab === 'zen' && <SectionZen />}
-            {activeTab === 'herbs' && <SectionHerbs />}
-          </>
-        )}
-      </main>
-
-      {isAuthenticated && <Navigation />}
-
-      <style dangerouslySetInnerHTML={{ __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap');
-        
         body {
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
+            background-color: var(--parchment);
+            color: var(--ink);
+            font-family: 'Noto Serif TC', serif;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
         }
 
         .writing-vertical-rl {
-          writing-mode: vertical-rl;
-        }
-        
-        .font-serif {
-          font-family: 'Noto Serif TC', serif;
+            writing-mode: vertical-rl;
         }
 
+        /* 漣漪動畫 */
         @keyframes ripple {
-          0% { transform: scale(0.6); opacity: 0; }
-          20% { opacity: 0.3; }
-          100% { transform: scale(2.5); opacity: 0; }
+            0% { transform: scale(0.6); opacity: 0; }
+            20% { opacity: 0.3; }
+            100% { transform: scale(2.5); opacity: 0; }
         }
-
         .animate-ripple-slow {
-          animation: ripple 10s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            animation: ripple 10s cubic-bezier(0.4, 0, 0.2, 1) infinite;
         }
 
+        /* 脈動動畫 */
         @keyframes pulse-slow {
-          0%, 100% { transform: scale(0.95); opacity: 0.05; }
-          50% { transform: scale(1.05); opacity: 0.15; }
+            0%, 100% { transform: scale(0.95); opacity: 0.05; }
+            50% { transform: scale(1.05); opacity: 0.15; }
         }
-
         .animate-pulse-extra-slow {
-          animation: pulse-slow 10s ease-in-out infinite;
+            animation: pulse-slow 10s ease-in-out infinite;
         }
 
+        /* 趨勢線動畫 */
         @keyframes drawPath {
-          from { stroke-dasharray: 0, 300; opacity: 0; }
-          to { stroke-dasharray: 300, 300; opacity: 1; }
+            from { stroke-dasharray: 0, 300; opacity: 0; }
+            to { stroke-dasharray: 300, 300; opacity: 1; }
         }
-
         .animate-drawPath {
-          stroke-dasharray: 300;
-          animation: drawPath 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            stroke-dasharray: 300;
+            animation: drawPath 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
+        /* 淡入動畫 */
         @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(15px); }
-          to { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-
         .animate-fadeIn {
-          animation: fadeIn 0.8s ease-out forwards;
+            animation: fadeIn 0.8s ease-out forwards;
         }
 
-        .animate-spin-slow {
-          animation: spin 8s linear infinite;
+        .stamp {
+            display: inline-block;
+            border: 2px solid var(--cinnabar);
+            color: var(--cinnabar);
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            transform: rotate(-1deg);
+            transition: all 0.3s;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.05);
+            cursor: pointer;
+        }
+        .stamp:active { transform: scale(0.95); }
+        .stamp:hover { transform: rotate(0deg); }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.05); border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <!-- 背景層 -->
+    <div class="fixed inset-0 pointer-events-none opacity-[0.04] z-[100] mix-blend-multiply" 
+         style="background-image: url('https://www.transparenttextures.com/patterns/handmade-paper.png')"></div>
+    <div class="fixed -top-20 -right-20 w-80 h-80 bg-[#B89B72] rounded-full blur-[120px] opacity-[0.07] pointer-events-none"></div>
+    <div class="fixed -bottom-20 -left-20 w-80 h-80 bg-[#A13D2D] rounded-full blur-[120px] opacity-[0.05] pointer-events-none"></div>
+
+    <main id="app" class="max-w-md mx-auto px-8 pt-20 pb-44 relative z-10"></main>
+
+    <!-- 導覽列容器 -->
+    <div id="nav-container"></div>
+
+    <script>
+        // --- 數據與常量 ---
+        const COLORS = { cinnabar: '#A13D2D', ink: '#1A1A1A' };
+        
+        const HERB_LIBRARY = [
+            { name: '人參', nature: '微溫', taste: '甘、微苦', category: '補氣', desc: '大補元氣，復脈固脫，補脾益肺。' },
+            { name: '枸杞', nature: '平', taste: '甘', category: '補血', desc: '滋補肝腎，益精明目。' },
+            { name: '薄荷', nature: '涼', taste: '辛', category: '解表', desc: '宣散風熱，清頭目，透疹。' },
+            { name: '當歸', nature: '溫', taste: '甘、辛', category: '補血', desc: '補血和血，調經止痛，潤燥滑腸。' },
+            { name: '黃芪', nature: '微溫', taste: '甘', category: '補氣', desc: '補氣升陽，固表止汗。' }
+        ];
+
+        // --- 應用程式狀態 ---
+        let state = {
+            isAuthenticated: false,
+            activeTab: 'home',
+            totalZenSeconds: 1200,
+            zenLogs: [
+                { id: 1, duration: 600, timestamp: '昨日 申時', type: '定心' },
+                { id: 2, duration: 600, timestamp: '今日 卯時', type: '定心' }
+            ],
+            foodLogs: [
+                { id: 1, name: '玄米茶', nature: '性平', cal: 2, pro: 0.1, fat: 0, time: '晨時' }
+            ],
+            searchQuery: '',
+            selectedVital: null,
+            zenActive: false,
+            zenSeconds: 0,
+            scanning: false,
+            scanResult: null
+        };
+
+        // --- 工具函數 ---
+        function getChineseDateTime() {
+            const now = new Date();
+            const hours = now.getHours();
+            const shichenArray = [
+                { name: '子時', range: '23:00-01:00', greeting: '半夜 · 凝思', element: '水' },
+                { name: '丑時', range: '01:00-03:00', greeting: '凌晨 · 守靜', element: '土' },
+                { name: '寅時', range: '03:00-05:00', greeting: '黎明 · 聽息', element: '木' },
+                { name: '卯時', range: '05:00-07:00', greeting: '清晨 · 觀息', element: '木' },
+                { name: '辰時', range: '07:00-09:00', greeting: '食時 · 養氣', element: '土' },
+                { name: '巳時', range: '09:00-11:00', greeting: '隅中 · 安神', element: '火' },
+                { name: '午時', range: '11:00-13:00', greeting: '日中 · 靜悟', element: '火' },
+                { name: '未時', range: '13:00-15:00', greeting: '日昳 · 啜茗', element: '土' },
+                { name: '申時', range: '15:00-17:00', greeting: '晡時 · 閱卷', element: '金' },
+                { name: '酉時', range: '17:00-19:00', greeting: '日入 · 歸心', element: '金' },
+                { name: '戌時', range: '19:00-21:00', greeting: '黃昏 · 止欲', element: '土' },
+                { name: '亥時', range: '21:00-23:00', greeting: '人定 · 入夢', element: '水' }
+            ];
+            const shichenIdx = Math.floor((hours + 1) % 24 / 2);
+            return {
+                date: `${now.getFullYear()}年 ${now.getMonth() + 1}月 ${now.getDate()}日`,
+                shichen: shichenArray[shichenIdx],
+                term: "驚蟄"
+            };
         }
 
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+        function numberToChinese(num) {
+            const chineseNums = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+            if (num <= 10) return chineseNums[num];
+            if (num < 20) return '十' + (num % 10 === 0 ? '' : chineseNums[num % 10]);
+            const tens = Math.floor(num / 10);
+            const units = num % 10;
+            return (tens === 1 ? '十' : chineseNums[tens] + '十') + (units === 0 ? '' : chineseNums[units]);
         }
 
-        ::-webkit-scrollbar {
-          width: 4px;
-        }
-        ::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: rgba(0,0,0,0.05);
-          border-radius: 10px;
-        }
-      `}} />
-    </div>
-  );
-};
+        // --- 核心渲染函數 ---
+        function render() {
+            const app = document.getElementById('app');
+            const nav = document.getElementById('nav-container');
 
-export default App;
+            if (!state.isAuthenticated) {
+                app.innerHTML = renderLogin();
+                nav.innerHTML = '';
+                return;
+            }
+
+            // 渲染主導覽列
+            nav.innerHTML = renderNavigation();
+
+            // 根據標籤渲染內容
+            switch(state.activeTab) {
+                case 'home': app.innerHTML = renderHome(); break;
+                case 'vitals': app.innerHTML = renderVitals(); break;
+                case 'diet': app.innerHTML = renderDiet(); break;
+                case 'zen': app.innerHTML = renderZen(); break;
+                case 'herbs': app.innerHTML = renderHerbs(); break;
+            }
+        }
+
+        // --- 組件模板 ---
+        function renderLogin() {
+            return `
+                <div class="min-h-[85vh] flex flex-col items-center justify-center animate-fadeIn">
+                    <div class="mb-20 text-center">
+                        <div class="writing-vertical-rl text-5xl font-serif tracking-[0.4em] mx-auto border-x border-black/5 px-6 py-4 leading-none">
+                            本草心境
+                        </div>
+                        <p class="mt-8 text-xs font-serif tracking-[0.6em] opacity-30">心外無物 · 內視乾坤</p>
+                    </div>
+                    <div class="w-full max-w-[280px] space-y-4">
+                        <button onclick="login()" class="w-full flex items-center justify-center gap-3 py-3 border border-black/10 bg-white/40 rounded-sm hover:bg-white/60 transition-all active:scale-95">
+                            <span class="text-xs font-serif tracking-widest">以電子郵件入卷</span>
+                        </button>
+                        <div class="text-center">
+                            <button onclick="login()" class="text-[10px] font-serif opacity-30 tracking-widest hover:opacity-100 transition-opacity">
+                                [ 訪客身份入卷 ]
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNavigation() {
+            const isInsight = ['vitals', 'diet', 'zen'].includes(state.activeTab);
+            const hiddenClass = state.selectedVital ? 'opacity-0 translate-y-20 pointer-events-none' : 'opacity-100';
+
+            return `
+                <nav class="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center bg-white/40 backdrop-blur-lg rounded-full border border-black/5 shadow-xl z-50 transition-all duration-700 px-4 py-3 ${hiddenClass}">
+                    <button onclick="switchTab('home')" class="flex flex-col items-center px-4 transition-all ${state.activeTab === 'home' ? 'scale-110' : 'opacity-40'}">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="${state.activeTab === 'home' ? COLORS.cinnabar : COLORS.ink}" stroke-width="1.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        <span class="text-[10px] tracking-widest font-serif mt-1">卷軸</span>
+                    </button>
+                    <div class="w-[1px] h-4 bg-black/5 mx-2"></div>
+                    <div class="flex items-center gap-4 px-2">
+                        <button onclick="switchTab('diet')" class="flex flex-col items-center ${state.activeTab === 'diet' ? 'scale-110' : 'opacity-30'}">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="${state.activeTab === 'diet' ? COLORS.cinnabar : COLORS.ink}" stroke-width="1.5"><path d="M11 19l-7-7 7-7"></path><path d="M11 12h10"></path></svg>
+                            <span class="text-[9px] tracking-widest font-serif mt-1">食事</span>
+                        </button>
+                        <button onclick="switchTab('vitals')" class="flex flex-col items-center ${state.activeTab === 'vitals' ? 'scale-110' : 'opacity-30'}">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="${state.activeTab === 'vitals' ? COLORS.cinnabar : COLORS.ink}" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                            <span class="text-[9px] tracking-widest font-serif mt-1">氣血</span>
+                        </button>
+                        <button onclick="switchTab('zen')" class="flex flex-col items-center ${state.activeTab === 'zen' ? 'scale-110' : 'opacity-30'}">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="${state.activeTab === 'zen' ? COLORS.cinnabar : COLORS.ink}" stroke-width="1.5"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>
+                            <span class="text-[9px] tracking-widest font-serif mt-1">調息</span>
+                        </button>
+                    </div>
+                    <div class="w-[1px] h-4 bg-black/5 mx-2"></div>
+                    <button onclick="switchTab('herbs')" class="flex flex-col items-center px-4 transition-all ${state.activeTab === 'herbs' ? 'scale-110' : 'opacity-40'}">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="${state.activeTab === 'herbs' ? COLORS.cinnabar : COLORS.ink}" stroke-width="1.5"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8a8 8 0 0 1-10 10Z"></path><path d="M7 21c-4.3-1.47-6-6.44-6-10C7 10 7 10 7 21Z"></path></svg>
+                        <span class="text-[10px] tracking-widest font-serif mt-1">百草</span>
+                    </button>
+                </nav>
+            `;
+        }
+
+        function renderHome() {
+            const dt = getChineseDateTime();
+            const zenMin = Math.ceil(state.totalZenSeconds / 60);
+            return `
+                <div class="animate-fadeIn">
+                    <div class="flex justify-between items-start mb-16">
+                        <div class="flex gap-4">
+                            <div class="writing-vertical-rl text-3xl font-serif tracking-[0.2em] pt-4 border-r border-black/10 pr-4 leading-none">本草心境</div>
+                            <div class="flex gap-4">
+                                <div class="writing-vertical-rl text-[10px] font-serif opacity-30 pt-4 tracking-[0.5em]">${dt.date} · ${dt.term}</div>
+                                <div class="pt-4">
+                                    <p class="text-xs opacity-50 font-serif tracking-widest mb-1">${dt.shichen.name} (${dt.shichen.range})</p>
+                                    <h2 class="text-xl font-serif">${dt.shichen.greeting}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="w-12 h-12 rounded-full border border-black/10 flex items-center justify-center relative">
+                            <div class="w-8 h-8 rounded-full bg-[#A13D2D]/10 flex items-center justify-center">
+                                <span class="text-[10px] font-serif text-[#A13D2D]">${dt.shichen.element}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative p-10 mb-12 border border-black/5 bg-white/30 backdrop-blur-sm rounded-sm italic font-serif text-lg leading-loose tracking-widest text-center shadow-inner">
+                        <span class="absolute top-4 left-4 text-4xl opacity-10 font-serif">「</span>
+                        萬物並作，吾以觀復。<br>今日宜：早臥早起，廣步於庭。
+                        <span class="absolute bottom-4 right-4 text-4xl opacity-10 font-serif">」</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-6 bg-white/40 border border-black/5 rounded-sm">
+                            <p class="text-[10px] opacity-50 font-serif mb-4 tracking-widest uppercase">Step / 步履</p>
+                            <div class="flex items-baseline gap-1 flex-nowrap whitespace-nowrap overflow-hidden">
+                                <span class="text-2xl sm:text-4xl font-serif">六千</span>
+                                <span class="text-[10px] font-serif opacity-40 shrink-0">步</span>
+                            </div>
+                        </div>
+                        <button onclick="switchTab('zen')" class="p-6 bg-white/40 border border-black/5 rounded-sm text-left hover:bg-white/60 transition-all active:scale-95 group overflow-hidden">
+                            <div class="flex justify-between items-start mb-4">
+                                <p class="text-[10px] opacity-50 font-serif tracking-widest uppercase">Zen / 冥想</p>
+                                <svg class="w-3 h-3 opacity-0 group-hover:opacity-100 transition-all" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </div>
+                            <div class="flex items-baseline gap-1 flex-nowrap whitespace-nowrap overflow-hidden">
+                                <span class="text-2xl sm:text-4xl font-serif truncate">${numberToChinese(zenMin)}</span>
+                                <span class="text-[10px] font-serif opacity-40 shrink-0">分</span>
+                            </div>
+                        </button>
+                    </div>
+                    <button onclick="logout()" class="mt-24 block mx-auto text-[10px] font-serif opacity-20 hover:opacity-100 transition-opacity tracking-[0.3em]">[ 封存卷軸 · 登出 ]</button>
+                </div>
+            `;
+        }
+
+        function renderVitals() {
+            if (state.selectedVital) {
+                const vital = state.selectedVital;
+                return `
+                    <div class="animate-fadeIn">
+                        <button onclick="clearVital()" class="flex items-center gap-2 mb-10 text-[10px] font-serif opacity-40 hover:opacity-100"><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> 返回氣血清單</button>
+                        <div class="flex justify-between items-start mb-8">
+                            <h2 class="text-3xl font-serif tracking-widest">${vital.label.split(' ')[0]}趨勢</h2>
+                            <p class="text-2xl font-serif" style="color: ${vital.color}">${vital.value}</p>
+                        </div>
+                        <div class="relative h-64 w-full bg-white/20 border border-black/5 rounded-sm p-4 mb-8 flex items-end">
+                            <svg class="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                <path d="M 0,80 Q 10,75 20,60 T 40,65 T 60,40 T 80,45 T 100,20" fill="none" stroke="${vital.color}" stroke-width="1.5" stroke-linecap="round" class="animate-drawPath" />
+                            </svg>
+                        </div>
+                        <p class="text-xs font-serif leading-relaxed opacity-60">觀脈象：脈來流利，如盤走珠。此為氣血充盈之象，宜保持當前作息。</p>
+                    </div>
+                `;
+            }
+            return `
+                <div class="animate-fadeIn">
+                    <h2 class="text-3xl font-serif mb-12 tracking-widest">氣血盈虧</h2>
+                    <div class="space-y-8">
+                        ${[
+                            { id: 'heart', label: '脈搏 (Heart Rate)', value: '七十二', unit: '次/分', color: COLORS.cinnabar },
+                            { id: 'sleep', label: '深度睡眠 (Deep Sleep)', value: '三時', unit: '刻', color: '#6B705C' }
+                        ].map(item => `
+                            <div class="flex justify-between items-end border-b border-black/5 pb-6">
+                                <div>
+                                    <p class="text-[10px] font-serif opacity-40 mb-2 uppercase">${item.label}</p>
+                                    <div class="flex items-baseline gap-2">
+                                        <span class="text-2xl font-serif">${item.value}</span>
+                                        <span class="text-[10px] font-serif opacity-40">${item.unit}</span>
+                                    </div>
+                                </div>
+                                <div onclick="selectVital('${item.id}')" class="stamp" style="border-color: ${item.color}; color: ${item.color}">閱覽趨勢</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDiet() {
+            const totals = state.foodLogs.reduce((acc, curr) => ({
+                cal: acc.cal + curr.cal, pro: acc.pro + curr.pro, fat: acc.fat + curr.fat
+            }), { cal: 0, pro: 0, fat: 0 });
+
+            return `
+                <div class="animate-fadeIn">
+                    <h2 class="text-3xl font-serif tracking-widest mb-2">食事 · 觀性</h2>
+                    <p class="text-xs font-serif opacity-40 mb-8">每日供養，貴在節制</p>
+                    <div class="grid grid-cols-3 gap-2 mb-8">
+                        ${['Calories', 'Protein', 'Fat'].map(l => `
+                            <div class="p-4 bg-white/20 border border-black/5 text-center">
+                                <p class="text-[8px] font-serif opacity-40 mb-1 uppercase">${l}</p>
+                                <p class="text-xl font-serif">${l === 'Calories' ? totals.cal : (l === 'Protein' ? totals.pro.toFixed(1) : totals.fat.toFixed(1))}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="relative aspect-[4/3] bg-white/10 border border-black/5 rounded-sm overflow-hidden flex flex-col items-center justify-center p-4 mb-10 shadow-inner">
+                        ${state.scanning ? 
+                            `<div class="text-center animate-pulse"><p class="text-[10px] font-serif tracking-[0.5em]">識辨中...</p></div>` : 
+                            (state.scanResult ? 
+                                `<div class="text-center animate-fadeIn">
+                                    <h3 class="text-2xl font-serif mb-2">${state.scanResult.name}</h3>
+                                    <div class="flex justify-center gap-2 mb-4">
+                                        <span class="px-2 py-0.5 border border-[#A13D2D] text-[#A13D2D] text-[9px] font-serif">${state.scanResult.nature}</span>
+                                    </div>
+                                    <p class="text-[10px] font-serif opacity-50 italic">「${state.scanResult.benefit}」</p>
+                                    <button onclick="resetScan()" class="mt-4 text-[10px] font-serif opacity-20 underline">繼續觀照</button>
+                                </div>` :
+                                `<div class="text-center">
+                                    <svg class="w-6 h-6 mx-auto mb-4 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                    <div onclick="startScan()" class="stamp" style="color: black; border-color: black">開啟靈鏡</div>
+                                </div>`
+                            )
+                        }
+                    </div>
+                    <div class="space-y-3">
+                        ${state.foodLogs.map(log => `
+                            <div class="flex justify-between items-center p-4 bg-white/10 border border-black/5 rounded-sm">
+                                <div><span class="text-sm font-serif block">${log.name}</span><span class="text-[8px] font-serif opacity-30 tracking-tighter uppercase">${log.time}</span></div>
+                                <div class="text-right"><span class="text-[10px] font-serif block">${log.cal} 卡</span><span class="text-[10px] font-serif text-[#A13D2D]">${log.nature}</span></div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderZen() {
+            const isInhale = (state.zenSeconds % 10) < 5;
+            return `
+                <div class="animate-fadeIn">
+                    <div class="flex flex-col items-center justify-center min-h-[50vh]">
+                        <div class="relative w-64 h-64 flex items-center justify-center">
+                            ${state.zenActive ? `
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="absolute w-full h-full rounded-full border border-black/10 animate-ripple-slow" style="animation-delay: 0s; opacity: 0"></div>
+                                    <div class="absolute w-full h-full rounded-full border border-black/10 animate-ripple-slow" style="animation-delay: 2.5s; opacity: 0"></div>
+                                    <div class="absolute w-full h-full rounded-full border border-black/10 animate-ripple-slow" style="animation-delay: 5s; opacity: 0"></div>
+                                    <div class="absolute w-40 h-40 bg-black/[0.02] rounded-full animate-pulse-extra-slow"></div>
+                                </div>
+                            ` : `<div class="absolute w-40 h-40 border border-black/5 rounded-full opacity-40"></div>`}
+                            <div class="text-center z-10">
+                                <div class="text-4xl font-serif tracking-[0.4em] mb-4">${state.zenActive ? '息' : '定'}</div>
+                                ${state.zenActive ? `<div class="text-[10px] font-serif opacity-30 tabular-nums">${Math.floor(state.zenSeconds / 60)}:${String(state.zenSeconds % 60).padStart(2, '0')}</div>` : ''}
+                            </div>
+                        </div>
+                        <div class="mt-20 text-center relative w-full h-10 flex items-center justify-center">
+                            ${!state.zenActive ? 
+                                `<p class="text-sm font-serif opacity-40 tracking-[0.2em]">靜心入定，感受氣息</p>` : 
+                                `<p class="absolute text-sm font-serif tracking-[0.2em] transition-opacity duration-1000 ${isInhale ? 'opacity-40' : 'opacity-0'}">深緩吸氣 · 氣納丹田</p>
+                                 <p class="absolute text-sm font-serif tracking-[0.2em] transition-opacity duration-1000 ${!isInhale ? 'opacity-40' : 'opacity-0'}">徐徐吐納 · 萬慮皆消</p>`
+                            }
+                        </div>
+                        <div class="mt-10">
+                            <div onclick="toggleZen()" class="stamp" style="padding: 10px 40px; color: ${state.zenActive ? 'black' : COLORS.cinnabar}; border-color: ${state.zenActive ? 'black' : COLORS.cinnabar}">
+                                ${state.zenActive ? '結束調息' : '開始定心'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-16">
+                        <div class="flex items-center gap-2 mb-6 border-b border-black/5 pb-2">
+                            <h3 class="text-xs font-serif tracking-[0.3em] opacity-40">往日調息</h3>
+                        </div>
+                        ${state.zenLogs.map(log => `
+                            <div class="flex justify-between items-center py-3">
+                                <div><p class="text-sm font-serif">${log.type}</p><p class="text-[9px] font-serif opacity-30 mt-1 tracking-tighter uppercase">${log.timestamp}</p></div>
+                                <div class="text-right"><span class="text-xl font-serif">${Math.ceil(log.duration / 60)}</span><span class="text-[9px] font-serif opacity-40 ml-1">分</span></div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHerbs() {
+            const list = HERB_LIBRARY.filter(h => h.name.includes(state.searchQuery) || h.category.includes(state.searchQuery));
+            return `
+                <div class="animate-fadeIn">
+                    <h2 class="text-3xl font-serif mb-8 tracking-widest">百草圖鑑</h2>
+                    <div class="relative mb-10">
+                        <input oninput="updateSearch(this.value)" type="text" placeholder="尋百草 (如：補氣、人參)" value="${state.searchQuery}" class="w-full bg-white/40 border border-black/5 py-3 pl-10 pr-4 text-xs font-serif tracking-widest rounded-sm focus:outline-none focus:border-black/20">
+                    </div>
+                    <div class="space-y-6">
+                        ${list.map(h => `
+                            <div class="p-6 border border-black/5 bg-white/20 rounded-sm relative group overflow-hidden">
+                                <div class="absolute top-0 right-0 p-2 text-[8px] font-serif opacity-10 rotate-90 origin-top-right tracking-widest uppercase">${h.category}</div>
+                                <div class="flex justify-between items-start mb-4">
+                                    <div><h3 class="font-serif text-xl mb-1">${h.name}</h3><div class="flex gap-2"><span class="text-[9px] font-serif px-1.5 border border-[#A13D2D] text-[#A13D2D]">${h.nature}</span><span class="text-[9px] font-serif px-1.5 border border-black/10 opacity-40">${h.taste}</span></div></div>
+                                    <div class="stamp" style="color: black; border-color: black; opacity: 0" class="group-hover:opacity-100">詳閱</div>
+                                </div>
+                                <p class="text-xs font-serif opacity-50 leading-relaxed">${h.desc}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- 事件處理 ---
+        window.login = () => { state.isAuthenticated = true; render(); };
+        window.logout = () => { state.isAuthenticated = false; render(); };
+        window.switchTab = (tab) => { state.activeTab = tab; state.selectedVital = null; render(); };
+        window.selectVital = (id) => {
+            const vitals = [
+                { id: 'heart', label: '脈搏 (Heart Rate)', value: '七十二', unit: '次/分', color: COLORS.cinnabar },
+                { id: 'sleep', label: '深度睡眠 (Deep Sleep)', value: '三時', unit: '刻', color: '#6B705C' }
+            ];
+            state.selectedVital = vitals.find(v => v.id === id);
+            render();
+        };
+        window.clearVital = () => { state.selectedVital = null; render(); };
+        window.updateSearch = (val) => { state.searchQuery = val; render(); };
+        
+        window.startScan = () => {
+            state.scanning = true; render();
+            setTimeout(() => {
+                state.scanning = false;
+                state.scanResult = { name: '紅富士蘋果', nature: '性平', benefit: '生津止渴，潤肺除煩' };
+                state.foodLogs.unshift({ id: Date.now(), name: '紅富士蘋果', nature: '性平', cal: 52, pro: 0.3, fat: 0.2, time: getChineseDateTime().shichen.name });
+                render();
+            }, 2000);
+        };
+        window.resetScan = () => { state.scanResult = null; render(); };
+
+        window.toggleZen = () => {
+            if (state.zenActive) {
+                state.totalZenSeconds += state.zenSeconds;
+                state.zenLogs.unshift({ id: Date.now(), duration: state.zenSeconds, timestamp: `今日 ${getChineseDateTime().shichen.name}`, type: '定心' });
+                state.zenActive = false;
+                state.zenSeconds = 0;
+            } else {
+                state.zenActive = true;
+            }
+            render();
+        };
+
+        // --- 計時器 ---
+        setInterval(() => {
+            if (state.zenActive) {
+                state.zenSeconds++;
+                // 為了效能，每秒更新調息頁面
+                if (state.activeTab === 'zen') render();
+            }
+        }, 1000);
+
+        // 每分鐘更新一次時間
+        setInterval(() => render(), 60000);
+
+        // 初始化
+        render();
+    </script>
+</body>
+</html>
